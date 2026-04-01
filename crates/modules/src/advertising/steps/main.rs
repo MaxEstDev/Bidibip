@@ -155,24 +155,23 @@ impl ResetStep for MainSteps {
 #[serenity::async_trait]
 impl SubStep for MainSteps {
     async fn advance(&mut self, ctx: &Context, thread: &GuildChannel) -> Result<bool, BidibipError> {
-        if self.title.is_unset() {
-            if self.title.try_init(&ctx.http, thread, "Donne un titre à ton annonce", false).await? {
+
+        if self.is_recruiter.is_unset() {
+            if self.is_recruiter.try_init(&ctx.http, thread, "Es-tu recruteur ou recherches tu du travail ?", vec![
+                ("worker", "🔧 Je cherche du travail", What::Worker(WorkerInfos::default())),
+                ("recruiter", "🕵️‍♀️ Je recrute", What::Recruiter(RecruiterInfos::default())),
+            ]).await? {
                 return Ok(false);
             }
         }
 
-        if self.description.is_unset() {
-            if self.description.try_init(&ctx.http, thread, "Décris ton annonce, en quoi elle consiste, qui tu es etc...", false).await? {
-                return Ok(false);
-            }
+        if let Some(recruiter) = self.is_recruiter.value_mut() {
+            if !match recruiter {
+                What::Recruiter(infos) => { infos.advance(ctx, thread).await? }
+                What::Worker(infos) => { infos.advance(ctx, thread).await? }
+            } { return Ok(false); }
         }
-
-        if self.who_are_you.is_unset() {
-            if self.who_are_you.try_init(&ctx.http, thread, "Qui es tu ? Décris toi, ton entreprise, ton projet, ton expérience etc...", false).await? {
-                return Ok(false);
-            }
-        }
-
+        
         if self.kind.is_unset() {
             if self.kind.try_init(&ctx.http, thread, "Quel type de contrat recherches-tu ?", vec![
                 ("volunteering", "🤝 Bénévolat (non rémunéré)", Contract::Volunteering(VolunteeringInfos::default())),
@@ -196,21 +195,23 @@ impl SubStep for MainSteps {
                 Contract::OpenEnded(data) => { data.advance(ctx, thread).await? }
             } { return Ok(false); }
         }
-
-        if self.is_recruiter.is_unset() {
-            if self.is_recruiter.try_init(&ctx.http, thread, "Es-tu recruteur ou recherches tu du travail ?", vec![
-                ("worker", "🔧 Je cherche du travail", What::Worker(WorkerInfos::default())),
-                ("recruiter", "🕵️‍♀️ Je recrute", What::Recruiter(RecruiterInfos::default())),
-            ]).await? {
+        
+        if self.title.is_unset() {
+            if self.title.try_init(&ctx.http, thread, "Donne un titre à ton annonce", false).await? {
                 return Ok(false);
             }
         }
 
-        if let Some(recruiter) = self.is_recruiter.value_mut() {
-            if !match recruiter {
-                What::Recruiter(infos) => { infos.advance(ctx, thread).await? }
-                What::Worker(infos) => { infos.advance(ctx, thread).await? }
-            } { return Ok(false); }
+        if self.description.is_unset() {
+            if self.description.try_init(&ctx.http, thread, "Décris ton annonce, en quoi elle consiste ?", false).await? {
+                return Ok(false);
+            }
+        }
+
+        if self.who_are_you.is_unset() {
+            if self.who_are_you.try_init(&ctx.http, thread, "Qui es tu ? Décris toi, ton projet, ton expérience etc...", false).await? {
+                return Ok(false);
+            }
         }
 
         match self.contact.value_mut() {
